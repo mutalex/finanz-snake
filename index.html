@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<title>Finanz-Snake</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .game-canvas { background: #111; }
+  @keyframes shake { 0%{transform:translate(1px,1px);}20%{transform:translate(-1px,-2px);}40%{transform:translate(-3px,0px);}60%{transform:translate(3px,2px);}80%{transform:translate(1px,-1px);}100%{transform:translate(1px,2px);} }
+  .animate-shake { animation: shake 0.5s infinite; }
+</style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center p-4">
+  <h1 class="text-2xl mb-4">Finanz-Snake</h1>
+  <div id="hud" class="mb-2 text-sm"></div>
+  <canvas id="game" width="400" height="400" class="game-canvas border border-gray-700"></canvas>
+  <div id="message" class="mt-4 text-xl font-bold"></div>
+<script type="module" src="./dist/index.js"></script>
+</body>
+</html>
