@@ -3,6 +3,7 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const hud = document.getElementById('hud');
 const msg = document.getElementById('message');
+const overlay = document.getElementById('overlay');
 const size = 20;
 const cells = canvas.width / size;
 let state = {
@@ -22,6 +23,7 @@ let state = {
     currentMission: 0,
     lastTime: 0,
     speed: 150,
+    lastTaxTick: Date.now(),
 };
 function randomCell() {
     return { x: Math.floor(Math.random() * cells), y: Math.floor(Math.random() * cells) };
@@ -48,7 +50,7 @@ function missionDesc(m) {
         case 'factoring': return `Factoring ${m.progress}/${m.ziel}`;
         case 'kombiniert': return `Sammle je 1x Leasing/Mietkauf/Factoring`;
         case 'ekquote': return `Halte EK-Quote >50% ${Math.floor(m.progress)}/${m.ziel}s`;
-        case 'zeit': return `Sammle ${m.ziel} Objekte in Zeit`; // not used
+        case 'zeit': return `Sammle ${m.ziel} Objekte in 10s (${m.progress})`;
     }
 }
 function updateMission(type) {
@@ -70,8 +72,14 @@ function updateMission(type) {
         if (m.progress === 7)
             m.progress = 1; // mark as completed
     }
+    if (m.typ === 'zeit') {
+        if (!m.startTime)
+            m.startTime = Date.now();
+        m.progress++;
+    }
 }
 function checkMission() {
+    var _a;
     const m = state.missions[state.currentMission];
     if (!m)
         return;
@@ -91,6 +99,14 @@ function checkMission() {
             m.startTime = undefined;
             m.progress = 0;
         }
+    }
+    if (m.typ === 'zeit') {
+        if (Date.now() - ((_a = m.startTime) !== null && _a !== void 0 ? _a : 0) > 10000) {
+            m.progress = 0;
+            m.startTime = Date.now();
+        }
+        if (m.progress >= m.ziel)
+            completeMission();
     }
 }
 function completeMission() {
@@ -128,8 +144,13 @@ function draw() {
     }
     // snake
     ctx.fillStyle = state.adrenaline ? 'yellow' : 'lime';
-    for (const s of state.snake) {
+    for (const [i, s] of state.snake.entries()) {
         ctx.fillRect(s.x * size, s.y * size, size, size);
+        if (i === 0 && state.leasingShield > 0) {
+            ctx.strokeStyle = 'cyan';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(s.x * size, s.y * size, size, size);
+        }
     }
 }
 function updateHud() {
@@ -147,6 +168,7 @@ function handleCollision(item) {
     }
     if (item.type === 'mietkauf') {
         state.flex += 1;
+        spawnParticles(item.x, item.y);
     }
     if (item.type === 'hindernis') {
         if (state.leasingShield > 0) {
@@ -168,8 +190,27 @@ function handleCollision(item) {
     spawnItem();
 }
 function flash(color) {
-    canvas.classList.add('border-4', 'border-' + color + '-500', 'animate-pulse');
-    setTimeout(() => canvas.classList.remove('border-4', 'border-' + color + '-500', 'animate-pulse'), 200);
+    overlay.classList.add('animate-pulse');
+    overlay.style.backgroundColor = color;
+    canvas.classList.add('border-4', 'animate-pulse');
+    canvas.style.borderColor = color;
+    setTimeout(() => {
+        overlay.classList.remove('animate-pulse');
+        overlay.style.backgroundColor = '';
+        canvas.classList.remove('border-4', 'animate-pulse');
+        canvas.style.borderColor = '';
+    }, 200);
+}
+function spawnParticles(x, y) {
+    ['\uD83D\uDCB8', '\u2728', '\uD83E\uDE99'].forEach((emoji, i) => {
+        const el = document.createElement('span');
+        el.textContent = emoji;
+        el.className = 'particle';
+        el.style.left = x * size + 4 * i + 'px';
+        el.style.top = y * size + 'px';
+        overlay.appendChild(el);
+        setTimeout(() => el.remove(), 600);
+    });
 }
 function checkSelfCollision(head) {
     return state.snake.slice(1).some(s => s.x === head.x && s.y === head.y);
@@ -212,10 +253,19 @@ function tick() {
     state.itemTimestamps = state.itemTimestamps.filter(t => now - t < 10000);
     state.adrenaline = state.itemTimestamps.length >= 3;
     if (state.adrenaline) {
-        canvas.classList.add('animate-pulse');
+        overlay.classList.add('speedlines');
+        hud.classList.add('animate-pulse', 'text-yellow-300');
     }
     else {
-        canvas.classList.remove('animate-pulse');
+        overlay.classList.remove('speedlines');
+        hud.classList.remove('animate-pulse', 'text-yellow-300');
+    }
+    // periodic tax damage
+    if (state.items.some(i => i.type === 'finanzamt') && now - state.lastTaxTick > 1000) {
+        const damage = Math.max(0.05, BALANCING.taxBaseDamage - 0.05 * state.leasingCollected);
+        state.liquidity -= damage * 100;
+        state.lastTaxTick = now;
+        flash('red');
     }
     if (state.liquidity < 25) {
         canvas.classList.add('animate-shake', 'border-red-500');
